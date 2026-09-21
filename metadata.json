@@ -1,0 +1,6 @@
+{
+  "name": "Emoji Workshop",
+  "description": "Google Pixel Emoji Workshop wallpaper creator with Material You dual-tone palettes, procedural patterns, and high-resolution export.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
