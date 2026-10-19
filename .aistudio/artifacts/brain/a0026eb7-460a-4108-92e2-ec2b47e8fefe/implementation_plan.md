@@ -1,119 +1,91 @@
-# Implementation Plan: 3-Style Emoji Engine, SVG Eyes Recolor Fix, and Whole-Word Chinese Input
+# Implementation Plan: Lotus Polar Coordinate Spiral & Mobile Retina Wallpaper WYSIWYG Calibration
 
 ## Title & Summary
-# 3-Style Emoji Engine, SVG Vector Recolor Hardening, & Whole Chinese Word Support
-全面升级 Emoji 图案渲染与交互引擎：支持「线条化（Monochrome Outline）」、「半线条化（Illustrated Vector）」与「原图（Native System 3D）」3 种独立风格切换与批量控制；彻底修复老虎等 Emoji 眼睛/瞳孔与特定线条变色残留黑色的问题；重构输入解析系统，支持中文词语与自定义词组整词保留及自适应排版。
+# 极坐标螺旋 Lotus 重塑与移动端全平台壁纸下载所见即所得（WYSIWYG）像素级校准
+全面重塑 Lotus 图案纯正的「极坐标阿基米德双螺旋（$r = b \cdot \theta$）」数学骨架与动态切线旋转，彻底拉开其与 Bloom 同心圆环的花序形态差异；深入排查并彻底解决移动设备（手机和平板）因屏幕高像素比（Retina / OLED `devicePixelRatio`）引起的视口坐标系倍率分裂问题，实现移动端下载壁纸与预览框的 100% 绝对一致。
 
 ## User Review & Critical Decisions
 
 > [!IMPORTANT]
-> 根据您在 Clarification 阶段确认的交互方案：
-> 1. **3 种风格切换控制**：在每个 Emoji 标签上提供直观的「三态循环切换按钮（线条化 ➔ 半线条 ➔ 原图 ➔ 线条化）」，并在面板顶部增加「批量一键切换（全部线条化 / 全部半线条 / 全部原图）」控件。
-> 2. **中文词组与元素分词规则**：采用空格或逗号（包括中文逗号/顿号）作为分词界标，整词保持完整元素不拆散（例如输入「吃火锅 奶茶」或「吃」，保留为完整的「吃火锅」、「奶茶」、「吃」词语图元），同时对未加空格的纯 Emoji 符号串智能分段。
+> 针对您反馈的两个核心问题：
+> 1. **Lotus 螺旋特性丢失问题**：由于此前修改单圆心时将半径写成了按层累加的离散圆环，使得 Lotus 变成了与 Bloom 几乎无差别的同心圆形。已设计将其升级为真正连续的「极坐标阿基米德双螺旋花序」，具有世界原点 (0, 0) 唯一定位、层间距与弧长严密微分（严格保证 42px 以上净间距零重叠）、以及随螺旋流向动态旋转的生机韵律。
+> 2. **移动端下载壁纸与预览框不符（放大版）深层根因**：移动端（手机与平板）屏幕普遍具备 2x~3x 的视网膜屏（Retina / OLED，`window.devicePixelRatio = 2 或 3`）。代码在预览画布中错误地将 `contW * dpr` 作为逻辑绘图空间，导致在移动端视口内 Emoji 被缩小了 2 倍显示（塞入了过多内容）；而在点击下载时使用的是标准设计逻辑基准，导致导出的壁纸看起来正好放大了 2~3 倍。选择“桌面端网页”不会改变移动设备屏幕物理的 devicePixelRatio，因此无法消除偏差。
 
-- **确认决定 1（风格体系）**：保留「线条化（OpenMoji 纯单色轮廓）」、「半线条化（OpenMoji 矢量彩色插画）」与「原图（原生系统高精 3D/全彩 Emoji，不被网络矢量覆盖）」三位一体。
-- **确认决定 2（变色修复）**：彻底净化与重构 SVG Recolor 引擎，拦截 OpenMoji 中所有隐藏的黑色属性、未声明 fill/stroke 的默认黑色元素（如眼睛、瞳孔、胡须），使其 100% 遵循调色盘主题色。
-- **确认决定 3（整词保留）**：重构文本输入解析与 Canvas 绘制逻辑，中文词组在 Canvas 单元格内自适应字号与基线对齐，支持线条化与彩色排版。
+- **关键决策 1（Lotus 极坐标连续螺旋）**：采用阿基米德双臂对称极坐标螺旋方程 $r = b \cdot \theta$，以 (0, 0) 为唯一起始核，双臂交错呈 180° 中心对称，通过微分弧长积分沿曲线等弧长排布，并在视口拖拽时保持连续性。
+- **关键决策 2（移动端 DPR 视口坐标系统一）**：重构 `WallpaperCanvas` 与 `canvasRenderer` 的高清渲染契约——将容器 CSS 像素作为唯一的逻辑世界坐标系基准，通过 `ctx.scale(dpr, dpr)` 承接 Retina 高清栅格化，彻底剥离触控事件与画布尺寸中的非对称 dpr 因子，保证全设备、全分辨率 100% 构图绝对复刻。
 
 ---
 
 ## 1. Overview & Core Concept
 
 - **What It Does**:
-  1. 用户可以自由组合或批量指定当前壁纸中的 Emoji 使用「纯单色线条」、「扁平矢量半线条插画」或「系统原生 3D 原图」。
-  2. 修复单色线条模式下老虎等图标眼睛、瞳孔仍为黑色的视觉瑕疵，实现完全一致的 Material You 色彩融合。
-  3. 用户输入自定义文字（如中文词语「吃火锅」、「暴富」、「猫猫」）时，整词作为一个图元元素参与壁纸平铺、缩放与透镜交互。
-- **Target Audience / Persona**: 追求高品质壁纸定制、喜欢将个性化汉字/词语与 Emoji 混合排布的手机与电脑用户。
-- **Key Value**: 消除视觉瑕疵与风格覆盖闪烁，赋予用户完全可控的图形表现力与中文文字排版自由度。
+  1. **Lotus 极坐标连续螺旋花序**：在世界原点 (0, 0) 周围延展出两条优美蜿蜒的极坐标螺旋臂，每个 Emoji 沿着螺旋切线动态偏转，展现出向外旋转绽放的独特韵律，与同心圆环 Bloom 呈现完全不同的几何质感。
+  2. **移动端与平板端全真所见即所得（WYSIWYG）**：无论用户使用的是 Windows PC、MacBook、iPhone、iPad 还是 Android 手机，预览框中所圈定的图案构图、Emoji 大小、中心位置与排布细节，与下载保存到相册/本地的壁纸保持 1:1 绝对一致。
+- **Target Audience / Persona**: 习惯在手机或平板上直接制作、预览并导出个性化手机壁纸的移动端用户，以及要求高精度构图与几何美感的设计爱好者。
+- **Key Value**: 消除平台间显示倍率分裂导致的心理落差，保证在移动设备上“所见即所定，所定即所得”。
 
 ---
 
-## 2. User Experience & Visual Design
-
-### 2.1 风格切换三态交互与微交互
-- **单个 Emoji 标签项**：
-  - 展示当前图元字符（如 🐯、🌲、吃）。
-  - 右侧配有 **3 态微交互切换按钮**：
-    - `outline`（线条化）：笔刷图标 `Paintbrush`，深色线框微态。
-    - `vector`（半线条化）：调色盘图标 `Palette`，琥珀色亮起。
-    - `native`（原图）：星芒光泽图标 `Sparkles`，柔和翠蓝紫渐变光圈。
-  - 点击按钮在 `outline -> vector -> native` 间平滑循环，附带轻微缩放弹性反馈（`active:scale-95`）。
-- **面板顶部批量快捷栏**：
-  - 提供轻量、非胶囊的精巧 Segmented Control：`[全部线条] [全部半线条] [全部原图]`。
-  - 点击即可批量同步当前所有图元的展示风格。
-
-### 2.2 SVG 颜色注入与老虎眼睛修复
-- 老虎等 Emoji 在单色模式下，SVG 中的 `<circle>` 或 `<ellipse>` 瞳孔往往缺少明确的 fill 属性（依赖浏览器默认的 black 渲染）或使用了 `#231f20` / `#000000` / `class`。
-- 新增深度重色与默认属性注入：
-  - 递归遍历/替换所有硬编码黑色（`#000000`、`#000`、`#231F20`、`#1a1a1a`、`rgb(0,0,0)`、`black`）。
-  - 给 SVG 根节点强制设定 `color: outlineColor; fill: outlineColor; stroke: outlineColor;`，确保没有明确指定颜色的几何体全部被强制染色。
-  - 彻底杜绝任何黑斑残留。
-
-### 2.3 中文词语与整词排版
-- 输入框支持自由输入：例如 `吃火锅 奶茶 🐯` 或 `暴富, 开心`。
-- 按空格、换行、半角/全角逗号（`,`、`，`、`、`）分割词语，中文整词完整保留。
-- 在 Canvas 渲染中：
-  - 单字 Emoji/汉字居中标准尺寸展示；
-  - 多字中文词组（如 2~4 个字）自动计算适配比例与字号，利用系统原生粗体中文字体（`"PingFang SC", "Microsoft YaHei", sans-serif`）绘制，线条模式下呈现饱满质感，彩色模式下呈现鲜活文字。
-
----
-
-## 3. Technical Architecture & Data Strategy
+## 2. Technical Root-Cause Analysis (移动端壁纸放大根因排查)
 
 ```
-┌────────────────────────────────────────────────────────┐
-│                      EmojiTab UI                       │
-│  - Input Box with Smart Word Segmenter                 │
-│  - Batch Style Switcher (Outline | Vector | Native)    │
-│  - Chips with 3-State Toggle (Paintbrush/Palette/Spark)│
-└───────────────────────────┬────────────────────────────┘
-                            │
-                            ▼
-┌────────────────────────────────────────────────────────┐
-│                   types.ts Data Model                  │
-│  EmojiStyle = 'outline' | 'vector' | 'native'          │
-│  EmojiItem: { id: string; char: string; style: ... }   │
-└───────────────────────────┬────────────────────────────┘
-                            │
-                            ▼
-┌────────────────────────────────────────────────────────┐
-│                 emojiService & Assets                  │
-│  - outline: fetchRawMonochromeSvg + deepRecolorSvg     │
-│             (eliminates #231F20, eye pupils & black)   │
-│  - vector: fetchRawColorSvg (OpenMoji flat vector)     │
-│  - native: Direct canvas OS glyph (Apple/Noto emoji)   │
-│  - text/word: Immediate fallback (zero network delay)  │
-└───────────────────────────┬────────────────────────────┘
-                            │
-                            ▼
-┌────────────────────────────────────────────────────────┐
-│                canvasRenderer Pipeline                 │
-│  - drawEmoji(ctx, item, x, y, size, rot, outlineColor) │
-│    * 'outline' -> recolored SVG image / styled text    │
-│    * 'vector'  -> OpenMoji color SVG image             │
-│    * 'native'  -> OS Native Emoji / text (no SVG flash)│
-│    * Chinese Word -> Dynamic auto-scaled typography    │
-└────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        为什么移动端导出的壁纸是放大版？                      │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ 1. PC 端 (devicePixelRatio = 1):                                            │
+│    容器宽 contW = 200px                                                     │
+│    customWidth = contW * 1 = 200px (逻辑宽度)                               │
+│    Emoji 尺寸 = 46px                                                        │
+│    Emoji 相对视口占比 = 46 / 200 = 23%                                      │
+│    导出时: targetWidth = 1080px, resScale = 1080/200, 相对占比 = 46/200 = 23%│
+│    ==> 预览与导出完全一致!                                                  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ 2. 移动端/平板 (devicePixelRatio = 2 或 3):                                 │
+│    容器宽 contW = 200px, dpr = 2                                            │
+│    原本写法: customWidth = contW * 2 = 400px! (逻辑宽度变成了 400px)        │
+│    Emoji 尺寸仍为 46px                                                      │
+│    Emoji 相对视口占比 = 46 / 400 = 11.5% (视觉上变小了一倍，塞入更多 Emoji) │
+│    导出时: customWidth = frameW = 200px (使用的是 200px 基准!)              │
+│    导出后 Emoji 相对视口占比 = 46 / 200 = 23%                               │
+│    ==> 导致导出的壁纸在移动设备上看比预览框整整放大了 2 倍 (放大版)!        │
+│    同时，触控拖拽乘以了 dpr，导致手指拖 10px 画布移动 20px~30px。           │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 4. Implementation Steps
+## 3. Implementation Steps & Architectural Changes
 
-1. **类型定义升级 (`src/types.ts`)**：
-   - 扩充 `EmojiStyle` 为 `'outline' | 'vector' | 'native'`。
-   - 向后兼容已有的旧配置。
-2. **SVG 重色与资源加载器修复 (`src/services/emojiService.ts`)**：
-   - 增强 `recolorSvgString`：涵盖 `#231F20`、`#231f20`、`rgb(0,0,0)`、行内 style、以及无 fill 的眼珠几何体，彻底消除黑眼珠/黑斑。
-   - 明确缓存与加载通道：`'outline'` 走单色重色缓存，`'vector'` 走 OpenMoji 彩色矢量，`'native'` 直接跳过网络拉取，避免原图变半线条化的闪变。
-3. **Canvas 绘制器优化 (`src/services/canvasRenderer.ts`)**：
-   - 更新 `drawEmoji` 逻辑：当 style 为 `'native'` 时，直接通过 `drawColorTextFallback` 绘制原生系统全彩表情，不再触发或等待 OpenMoji 矢量覆盖。
-   - 强化多字中文词排版：根据字符长度自适应字号（如 2 字 0.55x，3 字 0.42x），避免多字词在网格中溢出。
-4. **Emoji 控制面板升级 (`src/components/EmojiTab.tsx`)**：
-   - 升级输入框分词逻辑：以空格、逗号等符号保留整词，连续纯 Emoji 自动析构。
-   - 芯片增加 3 态循环切换控件与清晰视觉反馈。
-   - 顶部增加批量一键切换器（全部线条化 / 全部半线条 / 全部原图）。
-5. **多比例导出与预览联动**：
-   - 确保 `DownloadModal` 离屏高清 Canvas 渲染与主画布完全同步 3 种风格与中文词组排版。
-6. **编译与全流程验证**：
-   - 执行 `lint_applet` 与 `compile_applet`，并在浏览器中验证老虎眼睛变色、3 种风格切换、中文词组输入无拆散。
+### 3.1 Lotus 极坐标阿基米德螺旋重塑
+- **数学模型**：
+  $$r = b \cdot \theta \quad \text{其中 } b = \frac{\text{pitch}}{2\pi}$$
+  - 双臂交错：$\theta_0 = \theta_{\text{initial}}$, $\theta_1 = \theta_{\text{initial}} + \pi$。
+  - 恒定弧长步进：基于弧长微分 $ds = \sqrt{r^2 + b^2} \, d\theta$，每次递增角度 $d\theta = \frac{\Delta s}{\sqrt{r^2 + b^2}}$，确保每个 Emoji 沿螺旋曲线间距严格恒定为 48px。
+  - 动态切线旋转：$\alpha = \theta + \arctan(b/r) + \frac{\pi}{2}$，让 Emoji 头部朝向螺旋外旋流向，灵动盛放。
+  - 视口裁剪加速：快速判断 $(x, y)$ 是否在当前可视范围内，避免越界绘制。
+  - 保证与 Bloom（同心阶梯圆环）在视觉与几何逻辑上的彻底独立。
+
+### 3.2 移动端与全端 Retina 视口坐标系统一修复
+- **修改 `src/components/WallpaperCanvas.tsx`**：
+  - 将传入 `renderWallpaper` 的 `customWidth` 和 `customHeight` 固定为容器逻辑尺寸（`contW`、`contH`），并将 `resolutionScale` 设为 `dpr`（`Math.min(window.devicePixelRatio || 1, 2)`）。
+  - 修正手势拖拽（Mouse Drag & Single Finger Touch Drag）：移除多余的 `* dpr` 换算，直接使用物理触摸差值 `dx`、`dy`，使得屏幕上移动多少像素，画布就平移多少逻辑坐标。
+  - 修正双指捏合缩放（Pinch-to-zoom）与中心定位计算，去掉触摸点中心坐标中多余的 `* dpr`。
+- **修改 `src/components/DownloadModal.tsx`**：
+  - 确保模态窗中内嵌的 `<WallpaperCanvas>` 呈现的预览比例，与 `handleExport` 使用离屏画布渲染时的基准比例完全一致（两者逻辑基准尺寸均为 `frameDimensions.width` 和 `frameDimensions.height`）。
+  - 保持离屏导出时的清晰度倍率：`resMultiplier = targetWidth / frameW`，通过 `renderWallpaper({ customWidth: frameW, customHeight: frameH, resolutionScale: resMultiplier })` 实现任何分辨率（1080P/2K/4K）下的完全等比例栅格化。
+
+---
+
+## 4. Verification Plan
+
+- **验证 1：Lotus 极坐标连续螺旋特性验证**：
+  - 切换到 Lotus 布局，观察中心核心与向外舒展的双臂螺旋曲线；
+  - 确认每个 Emoji 沿螺旋流线排列，具有动态切线倾斜角度；
+  - 与 Bloom 进行切换对比，确认 Bloom 为圆环形层层绽放，而 Lotus 为连续向外旋转的涡旋，特征泾渭分明。
+- **验证 2：移动端与平板端下载与预览 1:1 对比测试**：
+  - 在移动端模拟器（设置 DPR=2 或 DPR=3）以及实际触摸设备上打开壁纸编辑与下载模态框；
+  - 观察下载模态框内的预览框，记下边角切入的特定 Emoji 位置与大小；
+  - 点击“下载高清壁纸”并打开下载所得图片，与预览框完全重叠比对，验证位置、间距、缩放比例 100% 吻合，彻底杜绝“放大版”问题；
+  - 触摸拖动壁纸，确认移动端手指移动速率与画布位移完全 1:1 跟手，无加速跳跃。
+- **验证 3：全项目编译与代码规范检查**：
+  - 运行 `compile_applet` 和 `lint_applet`，确保构建完全通过，无任何语法或类型错误。

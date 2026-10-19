@@ -49,18 +49,13 @@ export const WallpaperCanvas: React.FC<WallpaperCanvasProps> = ({
     }
 
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const width = Math.round(contW * dpr);
-    const height = Math.round(contH * dpr);
-
-    if (width <= 0 || height <= 0 || isNaN(width) || isNaN(height)) {
-      return;
-    }
 
     renderWallpaper({
       canvas,
       config,
-      customWidth: width,
-      customHeight: height,
+      customWidth: contW,
+      customHeight: contH,
+      resolutionScale: dpr,
     });
   }, [config]);
 
@@ -122,9 +117,8 @@ export const WallpaperCanvas: React.FC<WallpaperCanvasProps> = ({
       if (!onViewportChange) return;
 
       const rect = container.getBoundingClientRect();
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      const mouseX = (e.clientX - rect.left) * dpr;
-      const mouseY = (e.clientY - rect.top) * dpr;
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
 
       const currentScale = Math.max(0.2, Math.min(5.0, config.scale || 1.0));
       const currentPanX = config.viewportOffset?.x || 0;
@@ -173,11 +167,10 @@ export const WallpaperCanvas: React.FC<WallpaperCanvasProps> = ({
     }
 
     if (onViewportChange) {
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
       onViewportChange(
         {
-          x: dragStartRef.current.startPanX + dx * dpr,
-          y: dragStartRef.current.startPanY + dy * dpr,
+          x: dragStartRef.current.startPanX + dx,
+          y: dragStartRef.current.startPanY + dy,
         },
         config.scale
       );
@@ -218,12 +211,11 @@ export const WallpaperCanvas: React.FC<WallpaperCanvasProps> = ({
         hasMovedRef.current = true;
 
         const rect = container.getBoundingClientRect();
-        const dpr = Math.min(window.devicePixelRatio || 1, 2);
         const t1 = e.touches[0];
         const t2 = e.touches[1];
         const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
-        const midX = ((t1.clientX + t2.clientX) / 2 - rect.left) * dpr;
-        const midY = ((t1.clientY + t2.clientY) / 2 - rect.top) * dpr;
+        const midX = (t1.clientX + t2.clientX) / 2 - rect.left;
+        const midY = (t1.clientY + t2.clientY) / 2 - rect.top;
 
         pinchStartRef.current = {
           dist,
@@ -249,11 +241,10 @@ export const WallpaperCanvas: React.FC<WallpaperCanvasProps> = ({
         }
 
         if (onViewportChange) {
-          const dpr = Math.min(window.devicePixelRatio || 1, 2);
           onViewportChange(
             {
-              x: dragStartRef.current.startPanX + dx * dpr,
-              y: dragStartRef.current.startPanY + dy * dpr,
+              x: dragStartRef.current.startPanX + dx,
+              y: dragStartRef.current.startPanY + dy,
             },
             config.scale
           );
@@ -264,12 +255,11 @@ export const WallpaperCanvas: React.FC<WallpaperCanvasProps> = ({
         hasMovedRef.current = true;
 
         const rect = container.getBoundingClientRect();
-        const dpr = Math.min(window.devicePixelRatio || 1, 2);
         const t1 = e.touches[0];
         const t2 = e.touches[1];
         const curDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
-        const curMidX = ((t1.clientX + t2.clientX) / 2 - rect.left) * dpr;
-        const curMidY = ((t1.clientY + t2.clientY) / 2 - rect.top) * dpr;
+        const curMidX = (t1.clientX + t2.clientX) / 2 - rect.left;
+        const curMidY = (t1.clientY + t2.clientY) / 2 - rect.top;
 
         const { dist: startDist, scale: startScale, midX: startMidX, midY: startMidY, panX: startPanX, panY: startPanY } = pinchStartRef.current;
         if (startDist <= 0) return;
